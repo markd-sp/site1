@@ -54,6 +54,19 @@ stage('Authenticate to Conjur via REST API') {
     }
 }
 
+stage('Verify Token') {
+    steps {
+        script {
+            echo "=== Token Verification ==="
+            sh """
+                echo "CONJUR_TOKEN is set: \${CONJUR_TOKEN:+yes}"
+                echo "CONJUR_TOKEN length: \${#CONJUR_TOKEN}"
+                echo "First 30 chars: \${CONJUR_TOKEN:0:30}"
+            """
+        }
+    }
+}
+
 stage('Retrieve AWS Credentials via REST API') {
     steps {
         script {
