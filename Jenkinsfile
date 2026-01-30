@@ -22,26 +22,58 @@ pipeline {
             }
         }
         
-stage('Authenticate to Conjur via REST API') {
+stage('Authenticate to Conjur via REST API - DEBUG') {
     steps {
         script {
             echo 'Authenticating to Conjur using REST API...'
             withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
                 def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
                 
-                // Get token and save to file
+                echo "CONJUR_URL: ${CONJUR_URL}"
+                echo "CONJUR_ACCOUNT: ${CONJUR_ACCOUNT}"
+                echo "CONJUR_LOGIN: ${CONJUR_LOGIN}"
+                echo "Encoded Login: ${encodedLogin}"
+                
+                // Get full response with status code
                 sh """
-                    curl -k -X POST \
+                    echo "=== Full Authentication Response ==="
+                    curl -k -v -X POST \
                       '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
                       -H 'Content-Type: text/plain' \
                       --data "\${API_KEY}" \
-                      -s > /tmp/conjur_token.txt
+                      -w "\\nHTTP_STATUS_CODE:%{http_code}\\n" \
+                      -o /tmp/conjur_token.txt \
+                      2>&1
+                    
+                    echo "=== Response Status ==="
+                    cat /tmp/conjur_token.txt
+                    echo ""
+                    
+                    echo "=== Token Length ==="
+                    wc -c /tmp/conjur_token.txt
                 """
                 
-                // Read token from file
-                env.CONJUR_TOKEN = readFile('/tmp/conjur_token.txt').trim()
+                // Read the token
+                def tokenContent = readFile('/tmp/conjur_token.txt').trim()
                 
-                echo "✓ Successfully authenticated (token length: ${env.CONJUR_TOKEN.length()})"
+                echo "=== Token Analysis ==="
+                echo "Token length: ${tokenContent.length()}"
+                echo "First 50 chars: ${tokenContent.take(50)}"
+                echo "Last 50 chars: ${tokenContent.takeRight(50)}"
+                echo "Contains 'error': ${tokenContent.toLowerCase().contains('error')}"
+                echo "Contains 'unauthorized': ${tokenContent.toLowerCase().contains('unauthorized')}"
+                
+                // Check if it looks like a valid token (should be long base64-ish string)
+                if (tokenContent.length() < 100) {
+                    error("Token too short! Expected 500+ chars, got ${tokenContent.length()}. Content: ${tokenContent}")
+                }
+                
+                if (tokenContent.contains('error') || tokenContent.contains('401') || tokenContent.contains('unauthorized')) {
+                    error("Authentication failed! Response: ${tokenContent}")
+                }
+                
+                env.CONJUR_TOKEN = tokenContent
+                echo "✓ Token stored in environment"
             }
         }
     }
