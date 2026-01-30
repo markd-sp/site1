@@ -31,7 +31,7 @@ pipeline {
                            url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
                            httpMode: 'POST',
                            contentType: 'TEXT_PLAIN',
-                           requestBody: '$API_KEY',
+                           requestBody: Basic '$API_KEY',
                            validResponseCodes: '200'
                        )
                        env.CONJUR_TOKEN = authResponse.content
