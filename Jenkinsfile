@@ -59,37 +59,58 @@ stage('Retrieve AWS Credentials via REST API') {
         script {
             echo 'Retrieving AWS credentials from Conjur...'
             
-            // Write a shell script to handle the curl commands
-            sh """
-                # Function to retrieve secret
-                get_secret() {
-                    local secret_path=\$1
+            // Debug: Check token exists
+            echo "Token is set: ${env.CONJUR_TOKEN != null && !env.CONJUR_TOKEN.isEmpty()}"
+            
+            // Retrieve AWS Access Key
+            env.AWS_ACCESS_KEY_ID = sh(
+                script: '''
                     curl -k -X GET \
-                      "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/\${secret_path}" \
-                      -H "Authorization: Token token=${CONJUR_TOKEN}" \
+                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_ACCESS_KEY_PATH + '''" \
+                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
                       -s
-                }
-                
-                # Retrieve all secrets and save to files
-                get_secret "${AWS_ACCESS_KEY_PATH}" > /tmp/aws_access_key.txt
-                get_secret "${AWS_SECRET_KEY_PATH}" > /tmp/aws_secret_key.txt
-                get_secret "${BUCKET_NAME_PATH}" > /tmp/s3_bucket.txt
-                get_secret "${REGION_PATH}" > /tmp/aws_region.txt
-            """
+                ''',
+                returnStdout: true
+            ).trim()
             
-            // Read the values from files
-            env.AWS_ACCESS_KEY_ID = sh(script: 'cat /tmp/aws_access_key.txt', returnStdout: true).trim()
-            env.AWS_SECRET_ACCESS_KEY = sh(script: 'cat /tmp/aws_secret_key.txt', returnStdout: true).trim()
-            env.S3_BUCKET = sh(script: 'cat /tmp/s3_bucket.txt', returnStdout: true).trim()
-            env.AWS_REGION = sh(script: 'cat /tmp/aws_region.txt', returnStdout: true).trim()
+            echo "AWS Access Key retrieved (length: ${env.AWS_ACCESS_KEY_ID.length()})"
             
-            // Clean up temp files
-            sh 'rm -f /tmp/aws_access_key.txt /tmp/aws_secret_key.txt /tmp/s3_bucket.txt /tmp/aws_region.txt'
-            
-            // Verify we got values
-            if (env.AWS_ACCESS_KEY_ID.contains('error') || env.AWS_ACCESS_KEY_ID.length() < 10) {
-                error("Failed to retrieve AWS credentials")
+            if (env.AWS_ACCESS_KEY_ID.contains('error') || env.AWS_ACCESS_KEY_ID.contains('401')) {
+                error("Failed to retrieve AWS Access Key: ${env.AWS_ACCESS_KEY_ID}")
             }
+            
+            // Retrieve AWS Secret Key
+            env.AWS_SECRET_ACCESS_KEY = sh(
+                script: '''
+                    curl -k -X GET \
+                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_SECRET_KEY_PATH + '''" \
+                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
+                      -s
+                ''',
+                returnStdout: true
+            ).trim()
+            
+            // Retrieve S3 Bucket
+            env.S3_BUCKET = sh(
+                script: '''
+                    curl -k -X GET \
+                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + BUCKET_NAME_PATH + '''" \
+                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
+                      -s
+                ''',
+                returnStdout: true
+            ).trim()
+            
+            // Retrieve AWS Region
+            env.AWS_REGION = sh(
+                script: '''
+                    curl -k -X GET \
+                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + REGION_PATH + '''" \
+                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
+                      -s
+                ''',
+                returnStdout: true
+            ).trim()
             
             echo '✓ Successfully retrieved all secrets'
         }
