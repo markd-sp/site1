@@ -30,8 +30,8 @@ pipeline {
                        def authResponse = httpRequest(
                            url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
                            httpMode: 'POST',
-                           contentType: 'TEXT_PLAIN',
-                           requestBody: 'Basic $API_KEY',
+                           contentType: 'base64',
+                           requestBody: '$API_KEY',
                            validResponseCodes: '200'
                        )
                        env.CONJUR_TOKEN = authResponse.content
