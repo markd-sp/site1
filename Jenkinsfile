@@ -33,7 +33,7 @@ stage('Authenticate to Conjur via REST API') {
                 // Pass API_KEY as environment variable, not interpolated
                 def token = sh(
                     script: """
-                        curl -k -v -X POST \
+                        curl -k -X POST \
                           '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
                           -H 'Content-Type: text/plain' \
                           --data "\${API_KEY}" \
