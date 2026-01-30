@@ -8,10 +8,10 @@ pipeline {
         CONJUR_LOGIN = 'host/debian-1'          // REPLACE with your host login
         
         // Secret paths in Conjur
-        AWS_ACCESS_KEY_PATH = 'jenkins-portfolio/aws/portfolio/access-key-id'
-        AWS_SECRET_KEY_PATH = 'jenkins-portfolio/aws/portfolio/secret-access-key'
-        BUCKET_NAME_PATH = 'jenkins-portfolio/aws/portfolio/bucket-name'
-        REGION_PATH = 'jenkins-portfolio/aws/portfolio/region'
+        AWS_ACCESS_KEY_PATH = 'jenkins-app/aws/access-key-id'
+        AWS_SECRET_KEY_PATH = 'jenkins-app/aws/secret-access-key'
+        BUCKET_NAME_PATH = 'jenkins-app/aws/bucket-name'
+        REGION_PATH = 'jenkins-app/aws/region'
     }
     
     stages {
