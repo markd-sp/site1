@@ -22,24 +22,24 @@ pipeline {
             }
         }
         
-#        stage('Authenticate to Conjur') {
-#            steps {
-#                script {
-#                    echo 'Authenticating to Conjur...'
-#                    withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'api_key')]) {
-#                        def authResponse = httpRequest(
-#                            url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
-#                            httpMode: 'POST',
-#                            contentType: 'TEXT_PLAIN',
-#                            requestBody: API_KEY,
-#                            validResponseCodes: '200'
-#                        )
-#                        env.CONJUR_TOKEN = authResponse.content
-#                        echo 'Successfully authenticated to Conjur ✓'
-#                    }
-#                }
-#            }
-#        }
+//       stage('Authenticate to Conjur') {
+//           steps {
+//               script {
+//                   echo 'Authenticating to Conjur...'
+//                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'api_key')]) {
+//                       def authResponse = httpRequest(
+//                           url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
+//                           httpMode: 'POST',
+//                           contentType: 'TEXT_PLAIN',
+//                           requestBody: API_KEY,
+//                           validResponseCodes: '200'
+//                       )
+//                       env.CONJUR_TOKEN = authResponse.content
+//                       echo 'Successfully authenticated to Conjur ✓'
+//                   }
+//               }
+//           }
+//       }
         
         stage('Retrieve AWS Credentials from Conjur') {
             steps {
