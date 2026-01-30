@@ -52,58 +52,32 @@ stage('Retrieve AWS Credentials via REST API') {
         script {
             echo 'Retrieving AWS credentials from Conjur...'
             
-            // Save token to file for curl to use
-            writeFile file: '/tmp/token.txt', text: env.CONJUR_TOKEN
-            
             sh """
-                # Read token from file
-                TOKEN=\$(cat /tmp/token.txt)
+                # Try WITHOUT base64 encoding first
+                TOKEN="${CONJUR_TOKEN}"
                 
-                echo "Retrieving AWS Access Key..."
-                curl -k -X GET \
+                echo "Attempt 1: Token as-is"
+                RESPONSE=\$(curl -k -w "\\nHTTP_CODE:%{http_code}" -X GET \
                   "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
                   -H "Authorization: Token token=\${TOKEN}" \
-                  -s > /tmp/aws_access_key.txt
+                  -s)
                 
-                echo "Retrieving AWS Secret Key..."
-                curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_SECRET_KEY_PATH}" \
-                  -H "Authorization: Token token=\${TOKEN}" \
-                  -s > /tmp/aws_secret_key.txt
+                echo "\$RESPONSE"
                 
-                echo "Retrieving S3 Bucket..."
-                curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${BUCKET_NAME_PATH}" \
-                  -H "Authorization: Token token=\${TOKEN}" \
-                  -s > /tmp/s3_bucket.txt
-                
-                echo "Retrieving AWS Region..."
-                curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${REGION_PATH}" \
-                  -H "Authorization: Token token=\${TOKEN}" \
-                  -s > /tmp/aws_region.txt
-                
-                # Clean up token file
-                rm -f /tmp/token.txt
+                if echo "\$RESPONSE" | grep -q "HTTP_CODE:401"; then
+                    echo "Attempt 2: Trying with base64 encoded token"
+                    TOKEN_B64=\$(echo -n "${CONJUR_TOKEN}" | base64)
+                    curl -k -X GET \
+                      "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                      -H "Authorization: Token token=\${TOKEN_B64}" \
+                      -s > /tmp/aws_access_key.txt
+                else
+                    echo "\$RESPONSE" | sed 's/HTTP_CODE:.*//' > /tmp/aws_access_key.txt
+                fi
             """
             
-            // Read all secrets from files
             env.AWS_ACCESS_KEY_ID = readFile('/tmp/aws_access_key.txt').trim()
-            env.AWS_SECRET_ACCESS_KEY = readFile('/tmp/aws_secret_key.txt').trim()
-            env.S3_BUCKET = readFile('/tmp/s3_bucket.txt').trim()
-            env.AWS_REGION = readFile('/tmp/aws_region.txt').trim()
-            
-            // Clean up secret files
-    //        sh 'rm -f /tmp/aws_access_key.txt /tmp/aws_secret_key.txt /tmp/s3_bucket.txt /tmp/aws_region.txt'
-            
-            // Verify we got actual values
-            echo "AWS Access Key length: ${env.AWS_ACCESS_KEY_ID.length()}"
-            
-            if (env.AWS_ACCESS_KEY_ID.contains('Authorization missing') || env.AWS_ACCESS_KEY_ID.length() < 10) {
-                error("Failed to retrieve AWS credentials")
-            }
-            
-            echo '✓ Successfully retrieved all secrets'
+            echo "Retrieved: ${env.AWS_ACCESS_KEY_ID.take(10)}..."
         }
     }
 }
