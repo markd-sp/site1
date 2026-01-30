@@ -36,7 +36,7 @@ pipeline {
                                 curl -X POST \
                                   '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
                                   -H 'Content-Type: text/plain' \
-                                  --data '${API_KEY}' \
+                                  --data "${API_KEY}" \
                                   -w '\\n%{http_code}' \
                                   -s
                             """,
