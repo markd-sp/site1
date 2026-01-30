@@ -22,44 +22,44 @@ pipeline {
             }
         }
         
-        stage('Authenticate to Conjur via REST API') {
-            steps {
-                script {
-                    echo 'Authenticating to Conjur using REST API...'
-                    withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
-                        // URL encode the login (host/name -> host%2Fname)
-                        def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
-                        
-                        // REST API call to authenticate
-                        def token = sh(
-                            script: """
-                                curl -X POST \
-                                  '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
-                                  -H 'Content-Type: text/plain' \
-                                  --data '${API_KEY}' \
-                                  -w '\\n%{http_code}' \
-                                  -s
-                            """,
-                            returnStdout: true
-                        ).trim()
-                        
-                        // Split response and status code
-                        def lines = token.split('\n')
-                        def statusCode = lines[-1]
-                        def tokenValue = lines[0..-2].join('\n')
-                        
-                        echo "HTTP Status: ${statusCode}"
-                        
-                        if (statusCode == '200') {
-                            env.CONJUR_TOKEN = tokenValue
-                            echo '✓ Successfully authenticated to Conjur'
-                        } else {
-                            error("Authentication failed with status code: ${statusCode}")
-                        }
-                    }
+stage('Authenticate to Conjur via REST API') {
+    steps {
+        script {
+            echo 'Authenticating to Conjur using REST API...'
+            withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
+                // URL encode the login (host/name -> host%2Fname)
+                def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
+                
+                // Pass API_KEY as environment variable, not interpolated
+                def token = sh(
+                    script: """
+                        curl -X POST \
+                          '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
+                          -H 'Content-Type: text/plain' \
+                          --data "\${API_KEY}" \
+                          -w '\\n%{http_code}' \
+                          -s
+                    """,
+                    returnStdout: true
+                ).trim()
+                
+                // Split response and status code
+                def lines = token.split('\n')
+                def statusCode = lines[-1]
+                def tokenValue = lines.size() > 1 ? lines[0..-2].join('\n') : ''
+                
+                echo "HTTP Status: ${statusCode}"
+                
+                if (statusCode == '200') {
+                    env.CONJUR_TOKEN = tokenValue
+                    echo '✓ Successfully authenticated to Conjur'
+                } else {
+                    error("Authentication failed with status code: ${statusCode}")
                 }
             }
         }
+    }
+}
         
         stage('Retrieve AWS Credentials via REST API') {
             steps {
