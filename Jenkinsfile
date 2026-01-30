@@ -26,12 +26,12 @@ pipeline {
            steps {
                script {
                    echo 'Authenticating to Conjur...'
-                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd')]) {
+                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'API_KEY')]) {
                        def authResponse = httpRequest(
                            url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
                            httpMode: 'POST',
                            contentType: 'TEXT_PLAIN',
-                           requestBody: API_KEY,
+                           requestBody: '$API_KEY',
                            validResponseCodes: '200'
                        )
                        env.CONJUR_TOKEN = authResponse.content
