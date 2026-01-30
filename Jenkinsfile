@@ -3,7 +3,7 @@ pipeline {
     
     environment {
         // Conjur configuration
-        CONJUR_URL = 'http://192.168.216.130:8080/'  // REPLACE with your Conjur URL
+        CONJUR_URL = 'http://192.168.216.130:8080'  // REPLACE with your Conjur URL
         CONJUR_ACCOUNT = 'myConjurAccount'                    // REPLACE with your account
         CONJUR_LOGIN = 'host/debian-1'          // REPLACE with your host login
         
