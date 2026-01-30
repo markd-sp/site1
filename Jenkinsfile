@@ -69,7 +69,7 @@ stage('Authenticate to Conjur via REST API') {
                     // REST API: Get AWS Access Key ID
                     env.AWS_ACCESS_KEY_ID = sh(
                         script: """
-                            curl -X GET \
+                            curl -k -X GET \
                               '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}' \
                               -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
                               -s
@@ -80,7 +80,7 @@ stage('Authenticate to Conjur via REST API') {
                     // REST API: Get AWS Secret Access Key
                     env.AWS_SECRET_ACCESS_KEY = sh(
                         script: """
-                            curl -X GET \
+                            curl -k -X GET \
                               '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_SECRET_KEY_PATH}' \
                               -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
                               -s
@@ -91,7 +91,7 @@ stage('Authenticate to Conjur via REST API') {
                     // REST API: Get S3 Bucket Name
                     env.S3_BUCKET = sh(
                         script: """
-                            curl -X GET \
+                            curl -k -X GET \
                               '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${BUCKET_NAME_PATH}' \
                               -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
                               -s
@@ -102,7 +102,7 @@ stage('Authenticate to Conjur via REST API') {
                     // REST API: Get AWS Region
                     env.AWS_REGION = sh(
                         script: """
-                            curl -X GET \
+                            curl -k -X GET \
                               '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${REGION_PATH}' \
                               -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
                               -s
