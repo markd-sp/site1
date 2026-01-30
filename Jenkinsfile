@@ -94,7 +94,7 @@ stage('Retrieve AWS Credentials via REST API') {
             env.AWS_REGION = readFile('/tmp/aws_region.txt').trim()
             
             // Clean up secret files
-            sh 'rm -f /tmp/aws_access_key.txt /tmp/aws_secret_key.txt /tmp/s3_bucket.txt /tmp/aws_region.txt'
+    //        sh 'rm -f /tmp/aws_access_key.txt /tmp/aws_secret_key.txt /tmp/s3_bucket.txt /tmp/aws_region.txt'
             
             // Verify we got actual values
             echo "AWS Access Key length: ${env.AWS_ACCESS_KEY_ID.length()}"
