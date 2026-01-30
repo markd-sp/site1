@@ -27,93 +27,107 @@ stage('Authenticate to Conjur via REST API') {
         script {
             echo 'Authenticating to Conjur using REST API...'
             withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
-                // URL encode the login (host/name -> host%2Fname)
                 def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
                 
-                // Pass API_KEY as environment variable, not interpolated
+                // Get just the token, no status code mixed in
                 def token = sh(
                     script: """
                         curl -k -X POST \
                           '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
                           -H 'Content-Type: text/plain' \
                           --data "\${API_KEY}" \
-                          -w '\\n%{http_code}' \
                           -s
                     """,
                     returnStdout: true
                 ).trim()
                 
-                // Split response and status code
-                def lines = token.split('\n')
-                def statusCode = lines[-1]
-                def tokenValue = lines.size() > 1 ? lines[0..-2].join('\n') : ''
-                
-                echo "HTTP Status: ${statusCode}"
-                
-                if (statusCode == '200') {
-                    env.CONJUR_TOKEN = tokenValue
-                    echo '✓ Successfully authenticated to Conjur'
-                } else {
-                    error("Authentication failed with status code: ${statusCode}")
+                // Check if we got a token (should be a long base64-like string)
+                if (token.isEmpty() || token.contains('error') || token.contains('Malformed')) {
+                    error("Authentication failed. Response: ${token}")
                 }
+                
+                env.CONJUR_TOKEN = token
+                echo "✓ Successfully authenticated to Conjur"
+                echo "Token length: ${token.length()}"  // Should be ~500+ characters
             }
         }
     }
 }
         
-        stage('Retrieve AWS Credentials via REST API') {
-            steps {
-                script {
-                    echo 'Retrieving AWS credentials from Conjur...'
-                    
-                    // REST API: Get AWS Access Key ID
-                    env.AWS_ACCESS_KEY_ID = sh(
-                        script: """
-                            curl -k -X GET \
-                              '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}' \
-                              -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
-                              -s
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    
-                    // REST API: Get AWS Secret Access Key
-                    env.AWS_SECRET_ACCESS_KEY = sh(
-                        script: """
-                            curl -k -X GET \
-                              '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_SECRET_KEY_PATH}' \
-                              -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
-                              -s
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    
-                    // REST API: Get S3 Bucket Name
-                    env.S3_BUCKET = sh(
-                        script: """
-                            curl -k -X GET \
-                              '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${BUCKET_NAME_PATH}' \
-                              -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
-                              -s
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    
-                    // REST API: Get AWS Region
-                    env.AWS_REGION = sh(
-                        script: """
-                            curl -k -X GET \
-                              '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${REGION_PATH}' \
-                              -H 'Authorization: Token token="${env.CONJUR_TOKEN}"' \
-                              -s
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    
-                    echo '✓ Successfully retrieved all secrets via REST API'
-                }
+stage('Retrieve AWS Credentials via REST API') {
+    steps {
+        script {
+            echo 'Retrieving AWS credentials from Conjur...'
+            
+            // Test the token first
+            def testResponse = sh(
+                script: """
+                    curl -k -X GET \
+                      '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}' \
+                      -H "Authorization: Token token=\${CONJUR_TOKEN}" \
+                      -w '\\nHTTP_CODE:%{http_code}' \
+                      -s
+                """,
+                returnStdout: true
+            ).trim()
+            
+            echo "Test response: ${testResponse}"
+            
+            // Check for errors
+            if (testResponse.contains('Malformed') || testResponse.contains('error')) {
+                error("Token is invalid or malformed: ${testResponse}")
             }
+            
+            // If test passed, retrieve all secrets
+            env.AWS_ACCESS_KEY_ID = sh(
+                script: """
+                    curl -k -X GET \
+                      '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}' \
+                      -H "Authorization: Token token=\${CONJUR_TOKEN}" \
+                      -s
+                """,
+                returnStdout: true
+            ).trim()
+            
+            env.AWS_SECRET_ACCESS_KEY = sh(
+                script: """
+                    curl -k -X GET \
+                      '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_SECRET_KEY_PATH}' \
+                      -H "Authorization: Token token=\${CONJUR_TOKEN}" \
+                      -s
+                """,
+                returnStdout: true
+            ).trim()
+            
+            env.S3_BUCKET = sh(
+                script: """
+                    curl -k -X GET \
+                      '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${BUCKET_NAME_PATH}' \
+                      -H "Authorization: Token token=\${CONJUR_TOKEN}" \
+                      -s
+                """,
+                returnStdout: true
+            ).trim()
+            
+            env.AWS_REGION = sh(
+                script: """
+                    curl -k -X GET \
+                      '${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${REGION_PATH}' \
+                      -H "Authorization: Token token=\${CONJUR_TOKEN}" \
+                      -s
+                """,
+                returnStdout: true
+            ).trim()
+            
+            // Verify we got actual values
+            if (env.AWS_ACCESS_KEY_ID.contains('Malformed') || env.AWS_ACCESS_KEY_ID.length() < 10) {
+                error("Failed to retrieve AWS credentials")
+            }
+            
+            echo '✓ Successfully retrieved all secrets'
         }
+    }
+}
         
         stage('Verify AWS Connection') {
             steps {
