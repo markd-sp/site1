@@ -5,7 +5,7 @@ pipeline {
         // Conjur configuration
         CONJUR_URL = 'https://proxy:8443'  // REPLACE with your Conjur URL
         CONJUR_ACCOUNT = 'myConjurAccount'                    // REPLACE with your account
-        CONJUR_LOGIN = 'host/jenkins-hosts/debian-1'          // REPLACE with your host login
+        CONJUR_LOGIN = 'host%2Fjenkins-hosts%2Fdebian-1'          // REPLACE with your host login
         
         // Secret paths in Conjur
         AWS_ACCESS_KEY_PATH = 'jenkins-app/aws/access-key-id'
