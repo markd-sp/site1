@@ -26,7 +26,7 @@ pipeline {
            steps {
                script {
                    echo 'Authenticating to Conjur...'
-                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'api_key')]) {
+                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd')]) {
                        def authResponse = httpRequest(
                            url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
                            httpMode: 'POST',
