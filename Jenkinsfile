@@ -29,7 +29,6 @@ stage('Authenticate to Conjur via REST API') {
             withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
                 def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
                 
-                // Get just the token, no status code mixed in
                 def token = sh(
                     script: """
                         curl -k -X POST \
@@ -41,77 +40,48 @@ stage('Authenticate to Conjur via REST API') {
                     returnStdout: true
                 ).trim()
                 
-                // Check if we got a token (should be a long base64-like string)
-                if (token.isEmpty() || token.contains('error') || token.contains('Malformed')) {
-                    error("Authentication failed. Response: ${token}")
+                // Remove any newlines or carriage returns
+                token = token.replaceAll('\n', '').replaceAll('\r', '')
+                
+                if (token.isEmpty() || token.contains('error')) {
+                    error("Authentication failed: ${token}")
                 }
                 
                 env.CONJUR_TOKEN = token
-                echo "✓ Successfully authenticated to Conjur"
-                echo "Token length: ${token.length()}"  // Should be ~500+ characters
+                echo "✓ Successfully authenticated (token length: ${token.length()})"
             }
         }
     }
 }
-        
+
 stage('Retrieve AWS Credentials via REST API') {
     steps {
         script {
             echo 'Retrieving AWS credentials from Conjur...'
             
-            // Debug: Check token exists
-            echo "Token is set: ${env.CONJUR_TOKEN != null && !env.CONJUR_TOKEN.isEmpty()}"
+            sh """
+                # Function to retrieve secret
+                get_secret() {
+                    curl -k -s -X GET \
+                      "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/\$1" \
+                      -H "Authorization: Token token=${CONJUR_TOKEN}"
+                }
+                
+                # Retrieve secrets
+                get_secret "${AWS_ACCESS_KEY_PATH}" > /tmp/aws_ak.txt
+                get_secret "${AWS_SECRET_KEY_PATH}" > /tmp/aws_sk.txt
+                get_secret "${BUCKET_NAME_PATH}" > /tmp/bucket.txt
+                get_secret "${REGION_PATH}" > /tmp/region.txt
+            """
             
-            // Retrieve AWS Access Key
-            env.AWS_ACCESS_KEY_ID = sh(
-                script: '''
-                    curl -k -X GET \
-                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_ACCESS_KEY_PATH + '''" \
-                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
-                      -s
-                ''',
-                returnStdout: true
-            ).trim()
+            env.AWS_ACCESS_KEY_ID = readFile('/tmp/aws_ak.txt').trim()
+            env.AWS_SECRET_ACCESS_KEY = readFile('/tmp/aws_sk.txt').trim()
+            env.S3_BUCKET = readFile('/tmp/bucket.txt').trim()
+            env.AWS_REGION = readFile('/tmp/region.txt').trim()
             
-            echo "AWS Access Key retrieved (length: ${env.AWS_ACCESS_KEY_ID.length()})"
+//            sh 'rm -f /tmp/aws_ak.txt /tmp/aws_sk.txt /tmp/bucket.txt /tmp/region.txt'
             
-            if (env.AWS_ACCESS_KEY_ID.contains('error') || env.AWS_ACCESS_KEY_ID.contains('401')) {
-                error("Failed to retrieve AWS Access Key: ${env.AWS_ACCESS_KEY_ID}")
-            }
-            
-            // Retrieve AWS Secret Key
-            env.AWS_SECRET_ACCESS_KEY = sh(
-                script: '''
-                    curl -k -X GET \
-                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_SECRET_KEY_PATH + '''" \
-                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
-                      -s
-                ''',
-                returnStdout: true
-            ).trim()
-            
-            // Retrieve S3 Bucket
-            env.S3_BUCKET = sh(
-                script: '''
-                    curl -k -X GET \
-                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + BUCKET_NAME_PATH + '''" \
-                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
-                      -s
-                ''',
-                returnStdout: true
-            ).trim()
-            
-            // Retrieve AWS Region
-            env.AWS_REGION = sh(
-                script: '''
-                    curl -k -X GET \
-                      "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + REGION_PATH + '''" \
-                      -H "Authorization: Token token=\\"${CONJUR_TOKEN}\\"" \
-                      -s
-                ''',
-                returnStdout: true
-            ).trim()
-            
+            echo "✓ Retrieved AWS Access Key (length: ${env.AWS_ACCESS_KEY_ID.length()})"
             echo '✓ Successfully retrieved all secrets'
         }
     }
