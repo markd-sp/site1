@@ -47,6 +47,38 @@ stage('Authenticate to Conjur via REST API') {
     }
 }
 
+stage('Test All Token Formats') {
+    steps {
+        script {
+            sh """
+                TOKEN="${CONJUR_TOKEN}"
+                
+                echo "=== Testing different authorization formats ==="
+                
+                echo "Format 1: Token token=XXX"
+                curl -k -w "\\nStatus: %{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Token token=\${TOKEN}" \
+                  -s
+                
+                echo "---"
+                echo "Format 2: Token: XXX"
+                curl -k -w "\\nStatus: %{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Token \${TOKEN}" \
+                  -s
+                
+                echo "---"
+                echo "Format 3: Bearer XXX"
+                curl -k -w "\\nStatus: %{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Bearer \${TOKEN}" \
+                  -s
+            """
+        }
+    }
+}
+
 stage('Retrieve AWS Credentials via REST API') {
     steps {
         script {
