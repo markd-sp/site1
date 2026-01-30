@@ -5,7 +5,7 @@ pipeline {
         // Conjur configuration
         CONJUR_URL = 'http://192.168.216.130:8080'  // REPLACE with your Conjur URL
         CONJUR_ACCOUNT = 'myConjurAccount'                    // REPLACE with your account
-        CONJUR_LOGIN = 'jenkins-hosts/debian-1'          // REPLACE with your host login
+        CONJUR_LOGIN = 'host/jenkins-hosts/debian-1'          // REPLACE with your host login
         
         // Secret paths in Conjur
         AWS_ACCESS_KEY_PATH = 'jenkins-app/aws/access-key-id'
@@ -22,24 +22,24 @@ pipeline {
             }
         }
         
-//       stage('Authenticate to Conjur') {
-//           steps {
-//               script {
-//                   echo 'Authenticating to Conjur...'
-//                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'api_key')]) {
-//                       def authResponse = httpRequest(
-//                           url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
-//                           httpMode: 'POST',
-//                           contentType: 'TEXT_PLAIN',
-//                           requestBody: API_KEY,
-//                           validResponseCodes: '200'
-//                       )
-//                       env.CONJUR_TOKEN = authResponse.content
-//                       echo 'Successfully authenticated to Conjur ✓'
-//                   }
-//               }
-//           }
-//       }
+       stage('Authenticate to Conjur') {
+           steps {
+               script {
+                   echo 'Authenticating to Conjur...'
+                   withCredentials([conjurSecretCredential(credentialsId: 'f2df6edf-0d3a-4c8a-9a7c-752404ffedbd', variable: 'api_key')]) {
+                       def authResponse = httpRequest(
+                           url: "${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${CONJUR_LOGIN}/authenticate",
+                           httpMode: 'POST',
+                           contentType: 'TEXT_PLAIN',
+                           requestBody: API_KEY,
+                           validResponseCodes: '200'
+                       )
+                       env.CONJUR_TOKEN = authResponse.content
+                       echo 'Successfully authenticated to Conjur ✓'
+                   }
+               }
+           }
+       }
         
         stage('Retrieve AWS Credentials from Conjur') {
             steps {
