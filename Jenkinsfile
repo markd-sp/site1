@@ -61,6 +61,64 @@ stage('Authenticate to Conjur via REST API') {
     }
 }
 
+stage('Test All Token Variations') {
+    steps {
+        script {
+            sh """
+                # Original JSON token
+                JSON_TOKEN='${env.CONJUR_TOKEN}'
+                
+                # Base64 encode the JSON
+                B64_TOKEN=\$(echo -n "\${JSON_TOKEN}" | base64 -w 0)
+                
+                echo "=== Test 1: Plain JSON token ==="
+                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Token token=\${JSON_TOKEN}" \
+                  -s
+                
+                echo ""
+                echo "=== Test 2: Base64 encoded JSON ==="
+                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Token token=\${B64_TOKEN}" \
+                  -s
+                
+                echo ""
+                echo "=== Test 3: Just 'Token' prefix ==="
+                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
+                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                  -H "Authorization: Token \${JSON_TOKEN}" \
+                  -s
+                
+                echo ""
+                echo "=== Test 4: Get token in base64 format from start ==="
+            """
+            
+            // Try getting token with Accept-Encoding: base64
+            withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
+                def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
+                
+                sh """
+                    B64_RAW_TOKEN=\$(curl -k -X POST \
+                      '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
+                      -H 'Content-Type: text/plain' \
+                      -H 'Accept-Encoding: base64' \
+                      --data "\${API_KEY}" \
+                      -s)
+                    
+                    echo "Base64 raw token format: \${B64_RAW_TOKEN:0:50}..."
+                    
+                    curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
+                      "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
+                      -H "Authorization: Token token=\${B64_RAW_TOKEN}" \
+                      -s
+                """
+            }
+        }
+    }
+}
+
 stage('Retrieve AWS Credentials via REST API') {
     steps {
         script {
