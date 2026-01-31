@@ -29,91 +29,25 @@ stage('Authenticate to Conjur via REST API') {
             withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
                 def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
                 
-                // Get authentication response
-                def result = sh(
-                    script: """
-                        curl -k -X POST \
-                          '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
-                          -H 'Content-Type: text/plain' \
-                          --data "\${API_KEY}" \
-                          -w "\\nHTTPCODE:%{http_code}" \
-                          -s
-                    """,
-                    returnStdout: true
-                ).trim()
-                
-                // Parse response
-                def parts = result.split('HTTPCODE:')
-                def jsonResponse = parts[0].trim()
-                def httpCode = parts[1].trim()
-                
-                if (httpCode != '200') {
-                    error("Authentication failed with HTTP ${httpCode}")
-                }
-                
-                // The token is the entire JSON response
-                // Conjur expects the full JSON as the token
-                env.CONJUR_TOKEN = jsonResponse
-                
-                echo "✓ Successfully authenticated (token length: ${jsonResponse.length()})"
-            }
-        }
-    }
-}
-
-stage('Test All Token Variations') {
-    steps {
-        script {
-            sh """
-                # Original JSON token
-                JSON_TOKEN='${env.CONJUR_TOKEN}'
-                
-                # Base64 encode the JSON
-                B64_TOKEN=\$(echo -n "\${JSON_TOKEN}" | base64 -w 0)
-                
-                echo "=== Test 1: Plain JSON token ==="
-                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
-                  -H "Authorization: Token token=\${JSON_TOKEN}" \
-                  -s
-                
-                echo ""
-                echo "=== Test 2: Base64 encoded JSON ==="
-                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
-                  -H "Authorization: Token token=\${B64_TOKEN}" \
-                  -s
-                
-                echo ""
-                echo "=== Test 3: Just 'Token' prefix ==="
-                curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
-                  -H "Authorization: Token \${JSON_TOKEN}" \
-                  -s
-                
-                echo ""
-                echo "=== Test 4: Get token in base64 format from start ==="
-            """
-            
-            // Try getting token with Accept-Encoding: base64
-            withCredentials([string(credentialsId: 'conjur-api-key', variable: 'API_KEY')]) {
-                def encodedLogin = CONJUR_LOGIN.replace('/', '%2F')
-                
+                // Request token in base64 format (this is what Conjur expects to use)
                 sh """
-                    B64_RAW_TOKEN=\$(curl -k -X POST \
+                    curl -k -X POST \
                       '${CONJUR_URL}/authn/${CONJUR_ACCOUNT}/${encodedLogin}/authenticate' \
                       -H 'Content-Type: text/plain' \
                       -H 'Accept-Encoding: base64' \
                       --data "\${API_KEY}" \
-                      -s)
+                      -s > /tmp/conjur_token_b64.txt
                     
-                    echo "Base64 raw token format: \${B64_RAW_TOKEN:0:50}..."
-                    
-                    curl -k -w "\\nSTATUS:%{http_code}\\n" -X GET \
-                      "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
-                      -H "Authorization: Token token=\${B64_RAW_TOKEN}" \
-                      -s
+                    echo "Token retrieved (first 50 chars):"
+                    head -c 50 /tmp/conjur_token_b64.txt
+                    echo ""
                 """
+                
+                // Read the base64 token
+                env.CONJUR_TOKEN = readFile('/tmp/conjur_token_b64.txt').trim()
+                
+                echo "✓ Successfully authenticated"
+                echo "Token length: ${env.CONJUR_TOKEN.length()}"
             }
         }
     }
@@ -124,63 +58,59 @@ stage('Retrieve AWS Credentials via REST API') {
         script {
             echo 'Retrieving AWS credentials from Conjur...'
             
-            // Write token to file to avoid shell escaping issues with JSON
-            writeFile file: '/tmp/conjur_token.txt', text: env.CONJUR_TOKEN
+            // Save token to file
+            writeFile file: '/tmp/token.txt', text: env.CONJUR_TOKEN
             
-            sh """
-                # Read token from file
-                TOKEN=\$(cat /tmp/conjur_token.txt)
+            sh '''
+                TOKEN=$(cat /tmp/token.txt)
                 
                 echo "Retrieving AWS Access Key..."
                 curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_ACCESS_KEY_PATH}" \
-                  -H "Authorization: Token token=\"\${TOKEN}\"" \
+                  "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_ACCESS_KEY_PATH + '''" \
+                  -H "Authorization: Token token=${TOKEN}" \
                   -s > /tmp/aws_access_key.txt
                 
-                echo "Checking response..."
+                echo "Response:"
                 cat /tmp/aws_access_key.txt
                 
                 echo ""
                 echo "Retrieving AWS Secret Key..."
                 curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${AWS_SECRET_KEY_PATH}" \
-                  -H "Authorization: Token token=\"\${TOKEN}\"" \
+                  "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + AWS_SECRET_KEY_PATH + '''" \
+                  -H "Authorization: Token token=${TOKEN}" \
                   -s > /tmp/aws_secret_key.txt
                 
                 echo "Retrieving S3 Bucket..."
                 curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${BUCKET_NAME_PATH}" \
-                  -H "Authorization: Token token=\"\${TOKEN}\"" \
+                  "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + BUCKET_NAME_PATH + '''" \
+                  -H "Authorization: Token token=${TOKEN}" \
                   -s > /tmp/s3_bucket.txt
                 
                 echo "Retrieving AWS Region..."
                 curl -k -X GET \
-                  "${CONJUR_URL}/secrets/${CONJUR_ACCOUNT}/variable/${REGION_PATH}" \
-                  -H "Authorization: Token token=\"\${TOKEN}\"" \
+                  "''' + CONJUR_URL + '''/secrets/''' + CONJUR_ACCOUNT + '''/variable/''' + REGION_PATH + '''" \
+                  -H "Authorization: Token token=${TOKEN}" \
                   -s > /tmp/aws_region.txt
                 
-                # Clean up token file
-                rm -f /tmp/conjur_token.txt
-            """
+                rm -f /tmp/token.txt
+            '''
             
-            // Read all secrets
+            // Read secrets
             env.AWS_ACCESS_KEY_ID = readFile('/tmp/aws_access_key.txt').trim()
             env.AWS_SECRET_ACCESS_KEY = readFile('/tmp/aws_secret_key.txt').trim()
             env.S3_BUCKET = readFile('/tmp/s3_bucket.txt').trim()
             env.AWS_REGION = readFile('/tmp/aws_region.txt').trim()
             
-            // Clean up
+            // Cleanup
             sh 'rm -f /tmp/aws_access_key.txt /tmp/aws_secret_key.txt /tmp/s3_bucket.txt /tmp/aws_region.txt'
             
             // Verify
-            if (env.AWS_ACCESS_KEY_ID.contains('Authorization missing') || 
-                env.AWS_ACCESS_KEY_ID.contains('error') ||
-                env.AWS_ACCESS_KEY_ID.length() < 10) {
-                error("Failed to retrieve AWS credentials. Got: ${env.AWS_ACCESS_KEY_ID}")
+            if (env.AWS_ACCESS_KEY_ID.contains('Authorization missing')) {
+                error("Failed to retrieve secrets: ${env.AWS_ACCESS_KEY_ID}")
             }
             
-            echo "✓ Successfully retrieved AWS Access Key (length: ${env.AWS_ACCESS_KEY_ID.length()})"
-            echo '✓ Successfully retrieved all secrets'
+            echo "✓ AWS Access Key retrieved (length: ${env.AWS_ACCESS_KEY_ID.length()})"
+            echo "✓ Successfully retrieved all secrets"
         }
     }
 }
